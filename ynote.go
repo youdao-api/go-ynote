@@ -1,3 +1,39 @@
+/*
+	ynote package encapsulates the open API of Youdao Note(ynote for short,
+	note.youdao.com). The official site for open API is
+	http://note.youdao.com/open/.
+	
+	Usage:
+	
+	1) Create a *YnoteClient instance with development token/secret.
+		yc := ynote.NewOnlineYnoteClient(ynote.Credentials{
+			Token:  "****",
+			Secret: "****"})
+	2) If we dont' have the access token, get it as follow
+		tmpCred, err := yc.RequestTemporaryCredentials()
+		if err != nil {
+			return
+		}
+		fmt.Println("Temporary credentials got:", tmpCred)
+		
+		authUrl := yc.AuthorizationURL(tmpCred)
+		// Let the end-user access this URL of authUrl using a browser,
+		// authorize the request, and get a verifier.
+		
+		verifier := ... // Ask the end-user for the verifier
+		
+		accToken, err := yc.RequestToken(tmpCred, verifier)
+		if err != nil {
+			return
+		}
+		
+		save the accToken for further using.
+	3) If we read the access token from disk, Set it to the AccToken field of yc. (yc.RequestToken automatically set the field if success).
+		yc.AccToken = readAccToken()
+		
+	4) Using yc's method to do operations.
+
+*/
 package ynote
 
 import (
@@ -82,15 +118,23 @@ func (yc *YnoteClient) RequestToken(tmpCred *Credentials, verifier string) (accT
 	return yc.AccToken, err
 }
 
-/* UserInfo */
+/* Information of the ynote user. */
 type UserInfo struct {
+	// ID of the user
 	ID              string
+	// The name of the user
 	User            string
+	// The registration time
 	RegisterTime    time.Time
+	// The last login time
 	LastLoginTime   time.Time
+	// The modification time
 	LastModifyTime  time.Time
+	// Total size in bytes
 	TotalSize       int64
+	// Used size in bytes
 	UsedSize        int64
+	// Path tho the default notbook
 	DefaultNotebook string
 }
 
@@ -140,11 +184,17 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 	}, nil
 }
 
+/* The information of a notebook */
 type NotebookInfo struct {
+	// Name of the notebook
 	Name       string
+	// Path to the notebook
 	Path       string
+	// Number of notes in the notebook
 	NotesNum   int
+	// Creation time
 	CreateTime time.Time
+	// Last modification time
 	ModifyTime time.Time
 }
 
@@ -180,12 +230,13 @@ func parseNotebookInfo(js []byte) (*NotebookInfo, error) {
 
 	return nbInfo.asNotebookInfo(), nil
 }
-
+/* The information for a failure calling. It is returned as an error. */
 type FailInfo struct {
 	Message string
 	Err     string
 }
 
+/* Implementation of error.Error  */
 func (info *FailInfo) Error() string {
 	return fmt.Sprintf("%s: %s", info.Err, info.Message)
 }
@@ -210,8 +261,10 @@ func parseFailInfo(js []byte) *FailInfo {
 	}
 }
 
-/* CreateNotebook creates a new note book with specified name. An NotebookInfo
-is returned if succeeds, non-nil error returned otherwise */
+/*
+	CreateNotebook creates a new note book with specified name. An NotebookInfo
+	is returned if succeeds, non-nil error returned otherwise
+*/
 func (yc *YnoteClient) CreateNotebook(name string) (*NotebookInfo, error) {
 	reqUrl := yc.URLBase + "/yws/open/notebook/create.json"
 	params := make(url.Values)
