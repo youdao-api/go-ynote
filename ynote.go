@@ -344,7 +344,7 @@ func (yc *YnoteClient) DeleteNotebook(notebook string) error {
 	reqUrl := yc.URLBase + "/yws/open/notebook/delete.json"
 
 	params := make(url.Values)
-	params.Set("notebook", path)
+	params.Set("notebook", notebook)
 
 	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
 	if err != nil {
