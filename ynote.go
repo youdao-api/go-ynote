@@ -2,9 +2,9 @@
 	ynote package encapsulates the open API of Youdao Note(ynote for short,
 	note.youdao.com). The official site for open API is
 	http://note.youdao.com/open/.
-	
+
 	Usage:
-	
+
 	1) Create a *YnoteClient instance with development token/secret.
 		yc := ynote.NewOnlineYnoteClient(ynote.Credentials{
 			Token:  "****",
@@ -15,22 +15,22 @@
 			return
 		}
 		fmt.Println("Temporary credentials got:", tmpCred)
-		
+
 		authUrl := yc.AuthorizationURL(tmpCred)
 		// Let the end-user access this URL of authUrl using a browser,
 		// authorize the request, and get a verifier.
-		
+
 		verifier := ... // Ask the end-user for the verifier
-		
+
 		accToken, err := yc.RequestToken(tmpCred, verifier)
 		if err != nil {
 			return
 		}
-		
+
 		save the accToken for further using.
 	3) If we read the access token from disk, Set it to the AccToken field of yc. (yc.RequestToken automatically set the field if success).
 		yc.AccToken = readAccToken()
-		
+
 	4) Using yc's method to do operations.
 
 */
@@ -42,7 +42,8 @@ import (
 	"fmt"
 	"github.com/garyburd/go-oauth/oauth"
 	"io/ioutil"
-	"log"
+	//	"log"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -121,19 +122,19 @@ func (yc *YnoteClient) RequestToken(tmpCred *Credentials, verifier string) (accT
 /* Information of the ynote user. */
 type UserInfo struct {
 	// ID of the user
-	ID              string
+	ID string
 	// The name of the user
-	User            string
+	User string
 	// The registration time
-	RegisterTime    time.Time
+	RegisterTime time.Time
 	// The last login time
-	LastLoginTime   time.Time
+	LastLoginTime time.Time
 	// The modification time
-	LastModifyTime  time.Time
+	LastModifyTime time.Time
 	// Total size in bytes
-	TotalSize       int64
+	TotalSize int64
 	// Used size in bytes
-	UsedSize        int64
+	UsedSize int64
 	// Path tho the default notbook
 	DefaultNotebook string
 }
@@ -165,7 +166,7 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 	}
 	err = json.Unmarshal(js, &userInfo)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Response is not a JSON: " + string(js))
 	}
 
 	if res.StatusCode == 500 {
@@ -175,9 +176,9 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 	return &UserInfo{
 		ID:              userInfo.ID,
 		User:            userInfo.User,
-		RegisterTime:    time.Unix(0, userInfo.RegisterTime*1000000),
-		LastLoginTime:   time.Unix(0, userInfo.LastLoginTime*1000000),
-		LastModifyTime:  time.Unix(0, userInfo.LastModifyTime*1000000),
+		RegisterTime:    time.Unix(0, userInfo.RegisterTime*1000000000),
+		LastLoginTime:   time.Unix(0, userInfo.LastLoginTime*1000000000),
+		LastModifyTime:  time.Unix(0, userInfo.LastModifyTime*1000000000),
 		TotalSize:       userInfo.TotalSize,
 		UsedSize:        userInfo.UsedSize,
 		DefaultNotebook: userInfo.DefaultNotebook,
@@ -187,11 +188,11 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 /* The information of a notebook */
 type NotebookInfo struct {
 	// Name of the notebook
-	Name       string
+	Name string
 	// Path to the notebook
-	Path       string
+	Path string
 	// Number of notes in the notebook
-	NotesNum   int
+	NotesNum int
 	// Creation time
 	CreateTime time.Time
 	// Last modification time
@@ -214,8 +215,8 @@ func (nbInfo *notebookInfo) asNotebookInfo() *NotebookInfo {
 	return &NotebookInfo{
 		NotesNum:   nbInfo.NotesNum,
 		Name:       nbInfo.Name,
-		CreateTime: time.Unix(0, nbInfo.CreateTime*1000000),
-		ModifyTime: time.Unix(0, nbInfo.ModifyTime*1000000),
+		CreateTime: time.Unix(0, nbInfo.CreateTime*1000000000),
+		ModifyTime: time.Unix(0, nbInfo.ModifyTime*1000000000),
 		Path:       nbInfo.Path,
 	}
 }
@@ -225,11 +226,12 @@ func parseNotebookInfo(js []byte) (*NotebookInfo, error) {
 
 	err := json.Unmarshal(js, &nbInfo)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Response is not a JSON: " + string(js))
 	}
 
 	return nbInfo.asNotebookInfo(), nil
 }
+
 /* The information for a failure calling. It is returned as an error. */
 type FailInfo struct {
 	Message string
@@ -262,7 +264,7 @@ func parseFailInfo(js []byte) *FailInfo {
 }
 
 /*
-	CreateNotebook creates a new note book with specified name. An NotebookInfo
+	CreateNotebook creates a new note book with specified name. A *NotebookInfo
 	is returned if succeeds, non-nil error returned otherwise
 */
 func (yc *YnoteClient) CreateNotebook(name string) (*NotebookInfo, error) {
@@ -307,8 +309,7 @@ func (yc *YnoteClient) ListNotebooks() ([]*NotebookInfo, error) {
 	var nbInfos []notebookInfo
 	err = json.Unmarshal(js, &nbInfos)
 	if err != nil {
-		log.Println("Response is not a JSON:", string(js))
-		return nil, err
+		return nil, errors.New("Response is not a JSON: " + string(js))
 	}
 	nbs := make([]*NotebookInfo, 0, len(nbInfos))
 	for _, nb := range nbInfos {
@@ -333,6 +334,34 @@ func (yc *YnoteClient) FindNotebook(name string) (*NotebookInfo, error) {
 		}
 	}
 	return nil, nil
+}
+
+/*
+	DeleteNotebook deletes a notebook. Returns nil if succeed, the error
+	otherwise.
+*/
+func (yc *YnoteClient) DeleteNotebook(notebook string) error {
+	reqUrl := yc.URLBase + "/yws/open/notebook/delete.json"
+
+	params := make(url.Values)
+	params.Set("notebook", path)
+
+	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	js, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+
+	if res.StatusCode == 500 {
+		return parseFailInfo(js)
+	}
+
+	return nil
 }
 
 // Post issues a POST with the specified form.
@@ -389,9 +418,195 @@ func (yc *YnoteClient) CreateNote(notebookPath, title, author, source, content s
 	}
 	err = json.Unmarshal(js, &path)
 	if err != nil {
-		log.Println("Response is not a JSON:", string(js))
-		return "", err
+		return "", errors.New("Response is not a JSON: " + string(js))
 	}
 
 	return path.Path, nil
+}
+
+/*
+	ListNotes returns a list of path to all the notes in a notebook.
+*/
+func (yc *YnoteClient) ListNotes(notebookPath string) ([]string, error) {
+	reqUrl := yc.URLBase + "/yws/open/notebook/list.json"
+
+	params := make(url.Values)
+	params.Set("notebook", notebookPath)
+
+	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	js, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode == 500 {
+		return nil, parseFailInfo(js)
+	}
+
+	var notes []string
+	err = json.Unmarshal(js, &notes)
+	if err != nil {
+		return nil, errors.New("Response is not a JSON: " + string(js))
+	}
+
+	return notes, nil
+}
+
+/*
+	NoteInfo is the datastructure storing information and content of a note.
+*/
+type NoteInfo struct {
+	// Title of the note
+	Title      string
+	// Authro of the note
+	Author     string
+	// Source(URL) of the note
+	Source     string
+	// Size in bytes of the note
+	Size       int64
+	// Creation time
+	CreateTime time.Time
+	// Modification time
+	ModifyTime time.Time
+	// Content(HTML) of the note
+	Content    string
+}
+
+/*
+	NoteInfo returns the information and content of a note
+*/
+func (yc *YnoteClient) NoteInfo(path string) (*NoteInfo, error) {
+	reqUrl := yc.URLBase + "/yws/open/note/get.json"
+
+	params := make(url.Values)
+	params.Set("path", path)
+
+	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	js, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode == 500 {
+		return nil, parseFailInfo(js)
+	}
+
+	var noteInfo struct {
+		Title      string `json:"title"`
+		Author     string `json:"author"`
+		Source     string `json:"source"`
+		Size       int64  `json:"size"`
+		CreateTime int64  `json:"create_time"`
+		ModifyTime int64  `json:"modify_time"`
+		Content    string `json:"content"`
+	}
+
+	err = json.Unmarshal(js, &noteInfo)
+	if err != nil {
+		return nil, errors.New("Response is not a JSON: " + string(js))
+	}
+
+	return &NoteInfo{
+		Title:      noteInfo.Title,
+		Author:     noteInfo.Author,
+		Source:     noteInfo.Source,
+		Size:       noteInfo.Size,
+		CreateTime: time.Unix(0, noteInfo.CreateTime*1000000000),
+		ModifyTime: time.Unix(0, noteInfo.ModifyTime*1000000000),
+		Content:    noteInfo.Content,
+	}, nil
+}
+
+/*
+	UpdateNote modifies the title/author/source/content of a note
+*/
+func (yc *YnoteClient) UpdateNote(path, title, author, source, content string) (error) {
+	reqUrl := yc.URLBase + "/yws/open/note/update.json"
+
+	params := make(url.Values)
+	params.Set("path", path)
+	params.Set("title", title)
+	params.Set("author", author)
+	params.Set("source", source)
+	params.Set("content", content)
+
+	res, err := multipartPost(&yc.oauthClient, http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	js, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+
+	if res.StatusCode == 500 {
+		return parseFailInfo(js)
+	}
+
+	return nil
+}
+
+/*
+	DeleteNote deletes a note
+*/
+func (yc *YnoteClient) DeleteNote(path string) error {
+	reqUrl := yc.URLBase + "/yws/open/note/delete.json"
+
+	params := make(url.Values)
+	params.Set("path", path)
+
+	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	js, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+
+	if res.StatusCode == 500 {
+		return parseFailInfo(js)
+	}
+
+	return nil
+}
+
+/*
+	MoveNote moves a note into another notebook
+*/
+func (yc *YnoteClient) MoveNote(notePath, notebookPath string) error {
+	reqUrl := yc.URLBase + "/yws/open/note/move.json"
+
+	params := make(url.Values)
+	params.Set("path", notePath)
+	params.Set("notebook", notebookPath)
+
+	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	js, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return err
+	}
+
+	if res.StatusCode == 500 {
+		return parseFailInfo(js)
+	}
+
+	return nil
 }
