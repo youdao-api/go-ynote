@@ -1,0 +1,259 @@
+package main
+
+import (
+	"github.com/daviddengcn/go-villa"
+	ynote "github.com/daviddengcn/go-ynote"
+	"encoding/json"
+	"fmt"
+	"bufio"
+	"runtime"
+	"os"
+	"os/exec"
+	"strings"
+	"strconv"
+)
+
+const ac_FILENAME = villa.Path("at.json")
+
+func readAccToken() *ynote.Credentials {
+	js, err := ac_FILENAME.ReadFile()
+	if err != nil {
+		return nil
+	}
+
+	var cred ynote.Credentials
+	err = json.Unmarshal(js, &cred)
+	if err != nil {
+		return nil
+	}
+	return &cred
+}
+
+func saveAccToken(ac *ynote.Credentials) {
+	js, err := json.Marshal(ac)
+	if err != nil {
+		fmt.Println("Marshal accToken failed:", err)
+		return
+	}
+	err = ac_FILENAME.WriteFile(js, 0666)
+	if err != nil {
+		fmt.Println("Write accToken failed:", err)
+	}
+}
+
+func main() {
+	yc := ynote.NewOnlineYnoteClient(ynote.Credentials{
+		Token:  "",
+		Secret: ""})
+		
+	yc.AccToken = readAccToken()
+	
+	if yc.AccToken == nil {
+		fmt.Println("Access token (" + ac_FILENAME +
+			") not found, try authorize...")
+		fmt.Println("Requesting temporary credentials ...")
+		tmpCred, err := yc.RequestTemporaryCredentials()
+		if err != nil {
+			fmt.Println("RequestTemporaryCredentials failed: ", err)
+			return
+		}
+		fmt.Println("Temporary credentials got:", tmpCred)
+
+		authUrl := yc.AuthorizationURL(tmpCred)
+		fmt.Println(authUrl)
+		switch runtime.GOOS {
+		case "darwin":
+			exec.Command("open", authUrl).Start()
+		case "windows":
+			exec.Command("cmd", "/d", "/c", "start", authUrl).Start()
+		case "linux":
+			exec.Command("xdg-open", authUrl).Start()
+		}
+
+		fmt.Print("Please input the verifier: ")
+		verifier, err := bufio.NewReader(os.Stdin).ReadString('\n')
+
+		if err != nil {
+			fmt.Println("Read verifier from console failed: ", err)
+			return
+		}
+
+		verifier = strings.TrimSpace(verifier)
+		fmt.Println("verifier:", verifier)
+
+		accToken, err := yc.RequestToken(tmpCred, verifier)
+		if err != nil {
+			fmt.Println("RequestToken failed: ", err)
+			return
+		}
+
+		fmt.Println(accToken)
+		saveAccToken(accToken)
+	}
+	
+	const (
+		pos_ALL = iota
+		pos_NOTEBOOK
+		pos_NOTE
+	)
+	
+	status := pos_ALL
+	var notebook *ynote.NotebookInfo
+	var notePath string
+	
+	mainloop:
+	for {
+		switch status {
+		case pos_ALL:
+			nbs, err := yc.ListNotebooks()
+			if err != nil {
+				fmt.Println("ListNotebooks failed:", err)
+				break mainloop
+			}
+			
+			fmt.Println("All notebooks:")
+			for i, nb := range nbs {
+				fmt.Printf("%2d: %s(%d)\n", i+1, nb.Name, nb.NotesNum)
+			}
+			
+			if len(nbs) > 0 {
+				fmt.Printf("%d-%d: View notebook, ", 1, len(nbs))
+			}
+			fmt.Println("q: quit")
+			cmd, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			if err != nil {
+				fmt.Println("Read console failed:", err)
+				break mainloop
+			}
+			
+			cmd = strings.TrimSpace(cmd)
+			switch cmd {
+			case "q":
+				break mainloop
+			default:
+				idx, err := strconv.Atoi(cmd)
+				if err == nil && idx >= 1 && idx <= len(nbs) {
+					status = pos_NOTEBOOK
+					notebook = nbs[idx - 1]
+				}
+			}
+		case pos_NOTEBOOK:
+			fmt.Println("Notebook:", notebook.Name)
+			notes, err := yc.ListNotes(notebook.Path)
+			if err != nil {
+				fmt.Println("ListNotes failed:", err)
+				break mainloop
+			}
+			
+			for i, note := range notes {
+				if i >= 20 {
+					// only show top 20
+					break
+				}
+				ni, err := yc.NoteInfo(note)
+				if err != nil {
+					fmt.Printf("%2d: (path)%s\n", i+1, note)
+				} else {
+					fmt.Printf("%2d: %s\n", i+1, ni.Title)
+				}
+			}
+			
+			if len(notes) > 0 {
+				fmt.Printf("%d-%d: View notebook, ", 1, len(notes))
+			}
+			fmt.Println("a: all notebooks, q: quit")
+			cmd, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			if err != nil {
+				fmt.Println("Read console failed:", err)
+				break mainloop
+			}
+			
+			cmd = strings.TrimSpace(cmd)
+			switch cmd {
+			case "a":
+				status = pos_ALL
+			case "q":
+				break mainloop
+			default:
+				idx, err := strconv.Atoi(cmd)
+				if err == nil && idx >= 1 && idx <= len(notes) {
+					status = pos_NOTE
+					notePath = notes[idx - 1]
+				}
+			}
+			
+		case pos_NOTE:
+			fmt.Println("Note:", notePath)
+			
+			ni, err := yc.NoteInfo(notePath)
+			if err != nil {
+				fmt.Println("NoteInfo failed:", err)
+				status = pos_NOTEBOOK
+				continue
+			}
+			
+			fmt.Printf("Title     : %s\n", ni.Title)
+			fmt.Printf("Author    : %s\n", ni.Author)
+			fmt.Printf("Source    : %s\n", ni.Source)
+			fmt.Printf("Size      : %d bytes\n", ni.Size)
+			fmt.Printf("CreateTime: %v\n", ni.CreateTime)
+			fmt.Printf("ModifyTime: %v\n", ni.ModifyTime)
+			fmt.Printf("Content   : %d bytes\n", len(ni.Content))
+			
+			fmt.Println("a: all notebooks, n: notebook, q: quit, title/author/source: change title/author/source, content: show content, delete: delete current note")
+			cmd, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			if err != nil {
+				fmt.Println("Read console failed:", err)
+				break mainloop
+			}
+			
+			cmd = strings.TrimSpace(cmd)
+			switch cmd {
+			case "a":
+				status = pos_ALL
+			case "n":
+				status = pos_NOTEBOOK
+			case "q":
+				break mainloop
+			case "content":
+				fmt.Println(ni.Content)
+			case "delete":
+				fmt.Println("Deleting note.")
+				err := yc.DeleteNote(notePath)
+				if err != nil {
+					fmt.Println("DeleteNote failed:", err)
+				}
+				status = pos_NOTEBOOK
+			default:
+				if strings.HasPrefix(cmd, "title ") {
+					newTitle := strings.TrimSpace(cmd[len("title "):])
+					if len(newTitle) > 0 {
+						fmt.Println("Change title to", newTitle)
+						err := yc.UpdateNote(notePath, newTitle, ni.Author, ni.Source, ni.Content)
+						if err != nil {
+							fmt.Println("UpdateNote failed:", err)
+						}
+					}
+				} else if strings.HasPrefix(cmd, "author ") {
+					newAuthor := strings.TrimSpace(cmd[len("author "):])
+					if len(newAuthor) > 0 {
+						fmt.Println("Change author to", newAuthor)
+						err := yc.UpdateNote(notePath, ni.Title, newAuthor, ni.Source, ni.Content)
+						if err != nil {
+							fmt.Println("UpdateNote failed:", err)
+						}
+					}
+				} else if strings.HasPrefix(cmd, "soruce ") {
+					newSource := strings.TrimSpace(cmd[len("soruce "):])
+					if len(newSource) > 0 {
+						fmt.Println("Change soruce to", newSource)
+						err := yc.UpdateNote(notePath, ni.Title, ni.Author, newSource, ni.Content)
+						if err != nil {
+							fmt.Println("UpdateNote failed:", err)
+						}
+					}
+				}
+			}
+		}
+	}
+}
