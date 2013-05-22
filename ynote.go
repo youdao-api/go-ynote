@@ -179,9 +179,9 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 	return &UserInfo{
 		ID:              userInfo.ID,
 		User:            userInfo.User,
-		RegisterTime:    time.Unix(0, userInfo.RegisterTime*1000000000),
-		LastLoginTime:   time.Unix(0, userInfo.LastLoginTime*1000000000),
-		LastModifyTime:  time.Unix(0, userInfo.LastModifyTime*1000000000),
+		RegisterTime:    time.Unix(userInfo.RegisterTime, 0),
+		LastLoginTime:   time.Unix(userInfo.LastLoginTime, 0),
+		LastModifyTime:  time.Unix(userInfo.LastModifyTime, 0),
 		TotalSize:       userInfo.TotalSize,
 		UsedSize:        userInfo.UsedSize,
 		DefaultNotebook: userInfo.DefaultNotebook,
@@ -222,8 +222,8 @@ func (nbInfo *notebookInfo) asNotebookInfo() *NotebookInfo {
 		NotesNum:   nbInfo.NotesNum,
 		Name:       nbInfo.Name,
 		Group:      nbInfo.Group,
-		CreateTime: time.Unix(0, nbInfo.CreateTime*1000000000),
-		ModifyTime: time.Unix(0, nbInfo.ModifyTime*1000000000),
+		CreateTime: time.Unix(nbInfo.CreateTime, 0),
+		ModifyTime: time.Unix(nbInfo.ModifyTime, 0),
 		Path:       nbInfo.Path,
 	}
 }
@@ -546,8 +546,8 @@ func (yc *YnoteClient) NoteInfo(path string) (*NoteInfo, error) {
 		Author:     noteInfo.Author,
 		Source:     noteInfo.Source,
 		Size:       noteInfo.Size,
-		CreateTime: time.Unix(0, noteInfo.CreateTime*1000000000),
-		ModifyTime: time.Unix(0, noteInfo.ModifyTime*1000000000),
+		CreateTime: time.Unix(noteInfo.CreateTime, 0),
+		ModifyTime: time.Unix(noteInfo.ModifyTime, 0),
 		Content:    noteInfo.Content,
 	}, nil
 }
