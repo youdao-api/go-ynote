@@ -41,13 +41,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/garyburd/go-oauth/oauth"
+	"io"
 	"io/ioutil"
 	//	"log"
 	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
+	"path/filepath"
 )
 
 /* The URL base for online ynote service */
@@ -189,6 +192,8 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 type NotebookInfo struct {
 	// Name of the notebook
 	Name string
+	// Group the notebook belong to
+	Group string
 	// Path to the notebook
 	Path string
 	// Number of notes in the notebook
@@ -206,6 +211,7 @@ func (ni *NotebookInfo) String() string {
 type notebookInfo struct {
 	NotesNum   int    `json:"notes_num"`
 	Name       string `json:"name"`
+	Group      string `json:"group"`
 	CreateTime int64  `json:"create_time"`
 	ModifyTime int64  `json:"modify_time"`
 	Path       string `json:"path"`
@@ -215,6 +221,7 @@ func (nbInfo *notebookInfo) asNotebookInfo() *NotebookInfo {
 	return &NotebookInfo{
 		NotesNum:   nbInfo.NotesNum,
 		Name:       nbInfo.Name,
+		Group:      nbInfo.Group,
 		CreateTime: time.Unix(0, nbInfo.CreateTime*1000000000),
 		ModifyTime: time.Unix(0, nbInfo.ModifyTime*1000000000),
 		Path:       nbInfo.Path,
@@ -267,10 +274,13 @@ func parseFailInfo(js []byte) *FailInfo {
 	CreateNotebook creates a new note book with specified name. A *NotebookInfo
 	is returned if succeeds, non-nil error returned otherwise
 */
-func (yc *YnoteClient) CreateNotebook(name string) (*NotebookInfo, error) {
+func (yc *YnoteClient) CreateNotebook(name, group string) (*NotebookInfo, error) {
 	reqUrl := yc.URLBase + "/yws/open/notebook/create.json"
+	
 	params := make(url.Values)
 	params.Set("name", name)
+	params.Set("group", group)
+	
 	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
 	if err != nil {
 		return nil, err
@@ -305,7 +315,7 @@ func (yc *YnoteClient) ListNotebooks() ([]*NotebookInfo, error) {
 	if res.StatusCode == 500 {
 		return nil, parseFailInfo(js)
 	}
-
+	
 	var nbInfos []notebookInfo
 	err = json.Unmarshal(js, &nbInfos)
 	if err != nil {
@@ -365,12 +375,29 @@ func (yc *YnoteClient) DeleteNotebook(notebook string) error {
 }
 
 // Post issues a POST with the specified form.
-func multipartPost(c *oauth.Client, client *http.Client, credentials *oauth.Credentials, urlStr string, form url.Values) (*http.Response, error) {
+func multipartPost(c *oauth.Client, client *http.Client,
+	credentials *oauth.Credentials, urlStr string, form url.Values,
+	files map[string]struct {
+		filename string
+		r        io.Reader
+	}) (*http.Response, error) {
 	var bf = &bytes.Buffer{}
 	mw := multipart.NewWriter(bf)
 	contentType := mw.FormDataContentType()
 	for k := range form {
 		mw.WriteField(k, form.Get(k))
+	}
+
+	for field, entry := range files {
+		w, err := mw.CreateFormFile(field, filepath.Base(entry.filename))
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = io.Copy(w, entry.r)
+		if err != nil {
+			return nil, err
+		}
 	}
 	mw.Close()
 
@@ -398,7 +425,7 @@ func (yc *YnoteClient) CreateNote(notebookPath, title, author, source, content s
 	params.Set("source", source)
 	params.Set("content", content)
 
-	res, err := multipartPost(&yc.oauthClient, http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	res, err := multipartPost(&yc.oauthClient, http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params, nil)
 	if err != nil {
 		return "", err
 	}
@@ -461,19 +488,19 @@ func (yc *YnoteClient) ListNotes(notebookPath string) ([]string, error) {
 */
 type NoteInfo struct {
 	// Title of the note
-	Title      string
+	Title string
 	// Authro of the note
-	Author     string
+	Author string
 	// Source(URL) of the note
-	Source     string
+	Source string
 	// Size in bytes of the note
-	Size       int64
+	Size int64
 	// Creation time
 	CreateTime time.Time
 	// Modification time
 	ModifyTime time.Time
 	// Content(HTML) of the note
-	Content    string
+	Content string
 }
 
 /*
@@ -528,7 +555,7 @@ func (yc *YnoteClient) NoteInfo(path string) (*NoteInfo, error) {
 /*
 	UpdateNote modifies the title/author/source/content of a note
 */
-func (yc *YnoteClient) UpdateNote(path, title, author, source, content string) (error) {
+func (yc *YnoteClient) UpdateNote(path, title, author, source, content string) error {
 	reqUrl := yc.URLBase + "/yws/open/note/update.json"
 
 	params := make(url.Values)
@@ -538,7 +565,8 @@ func (yc *YnoteClient) UpdateNote(path, title, author, source, content string) (
 	params.Set("source", source)
 	params.Set("content", content)
 
-	res, err := multipartPost(&yc.oauthClient, http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
+	res, err := multipartPost(&yc.oauthClient, http.DefaultClient,
+		(*oauth.Credentials)(yc.AccToken), reqUrl, params, nil)
 	if err != nil {
 		return err
 	}
@@ -609,4 +637,91 @@ func (yc *YnoteClient) MoveNote(notePath, notebookPath string) error {
 	}
 
 	return nil
+}
+
+/*
+	AttachInfo is the datastructure containing information of an attachment
+*/
+type AttachInfo struct {
+	URL string
+	Src string
+}
+
+/*
+	UploadAttachment uploads an attachment
+*/
+func (yc *YnoteClient) UploadAttachment(filename string) (*AttachInfo, error) {
+	reqUrl := yc.URLBase + "/yws/open/resource/upload.json"
+
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	files := map[string]struct {
+		filename string
+		r        io.Reader
+	}{
+		"file": {
+			filename: filename,
+			r:        f,
+		},
+	}
+
+	res, err := multipartPost(&yc.oauthClient, http.DefaultClient,
+		(*oauth.Credentials)(yc.AccToken), reqUrl, nil, files)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	js, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode == 500 {
+		return nil, parseFailInfo(js)
+	}
+
+	var attachInfo struct {
+		URL string `json:"url"`
+		Src string `json:"src"`
+	}
+
+	err = json.Unmarshal(js, &attachInfo)
+	if err != nil {
+		return nil, errors.New("Response is not a JSON: " + string(js))
+	}
+
+	return &AttachInfo{
+		URL: attachInfo.URL,
+		Src: attachInfo.Src,
+	}, nil
+}
+
+/*
+	AuthorizeDownloadLink returns an authorized url from a download link in the
+	content of a note.
+*/
+func (yc *YnoteClient) AuthorizeDownloadLink(link string) string {
+	params := make(url.Values)
+	yc.oauthClient.SignForm((*oauth.Credentials)(yc.AccToken), "GET", link, params)
+	return link + "?" + params.Encode()
+/*
+        $request_url = $download_path;
+        $request_params = $this->generateOAuthParams($oauth_access_token);
+        $base_string = $this->buildBaseString('GET', $request_url, $request_params);
+		$oauth_signature = $this->sign($base_string, $oauth_access_secret);
+		
+        $request_url_full = $request_url;
+		if (count($request_params) > 0) {
+			$request_params_string = $this->buildParamString($request_params);
+			$request_url_full .= '?'.$request_params_string;
+		}
+		if (isset($oauth_signature)) {
+			$request_url_full.='&oauth_signature='.$oauth_signature;
+		}
+		return $request_url_full;
+*/	
 }
