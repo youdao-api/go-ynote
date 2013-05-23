@@ -49,8 +49,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"time"
 	"path/filepath"
+	"time"
 )
 
 /* The URL base for online ynote service */
@@ -160,9 +160,9 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 	var userInfo struct {
 		ID              string `json:"id"`
 		User            string `json:"user"`
-		RegisterTime    int64  `json:"register_time"`
-		LastLoginTime   int64  `json:"last_login_time"`
-		LastModifyTime  int64  `json:"last_modify_time"`
+		RegisterTime    int64  `json:"register_time"`    // in ms
+		LastLoginTime   int64  `json:"last_login_time"`  // in ms
+		LastModifyTime  int64  `json:"last_modify_time"` // in ms
 		TotalSize       int64  `json:"total_size"`
 		UsedSize        int64  `json:"used_size"`
 		DefaultNotebook string `json:"default_notebook"`
@@ -179,9 +179,9 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 	return &UserInfo{
 		ID:              userInfo.ID,
 		User:            userInfo.User,
-		RegisterTime:    time.Unix(userInfo.RegisterTime, 0),
-		LastLoginTime:   time.Unix(userInfo.LastLoginTime, 0),
-		LastModifyTime:  time.Unix(userInfo.LastModifyTime, 0),
+		RegisterTime:    time.Unix(0, userInfo.RegisterTime*int64(time.Millisecond)),
+		LastLoginTime:   time.Unix(0, userInfo.LastLoginTime*int64(time.Millisecond)),
+		LastModifyTime:  time.Unix(0, userInfo.LastModifyTime*int64(time.Millisecond)),
 		TotalSize:       userInfo.TotalSize,
 		UsedSize:        userInfo.UsedSize,
 		DefaultNotebook: userInfo.DefaultNotebook,
@@ -212,8 +212,8 @@ type notebookInfo struct {
 	NotesNum   int    `json:"notes_num"`
 	Name       string `json:"name"`
 	Group      string `json:"group"`
-	CreateTime int64  `json:"create_time"`
-	ModifyTime int64  `json:"modify_time"`
+	CreateTime int64  `json:"create_time"` // in seconds
+	ModifyTime int64  `json:"modify_time"` // in seconds
 	Path       string `json:"path"`
 }
 
@@ -247,7 +247,7 @@ type FailInfo struct {
 
 /* Implementation of error.Error  */
 func (info *FailInfo) Error() string {
-	return fmt.Sprintf("%s: %s", info.Err, info.Message)
+	return fmt.Sprintf("%d: %s", info.Err, info.Message)
 }
 
 func parseFailInfo(js []byte) *FailInfo {
@@ -260,7 +260,7 @@ func parseFailInfo(js []byte) *FailInfo {
 	if err != nil {
 		return &FailInfo{
 			Message: "Parse FailInfo failed: " + string(js),
-			Err:     "Unknown",
+			Err:     "Invalid JSON",
 		}
 	}
 
@@ -276,11 +276,11 @@ func parseFailInfo(js []byte) *FailInfo {
 */
 func (yc *YnoteClient) CreateNotebook(name, group string) (*NotebookInfo, error) {
 	reqUrl := yc.URLBase + "/yws/open/notebook/create.json"
-	
+
 	params := make(url.Values)
 	params.Set("name", name)
 	params.Set("group", group)
-	
+
 	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
 	if err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (yc *YnoteClient) ListNotebooks() ([]*NotebookInfo, error) {
 	if res.StatusCode == 500 {
 		return nil, parseFailInfo(js)
 	}
-	
+
 	var nbInfos []notebookInfo
 	err = json.Unmarshal(js, &nbInfos)
 	if err != nil {
@@ -531,8 +531,8 @@ func (yc *YnoteClient) NoteInfo(path string) (*NoteInfo, error) {
 		Author     string `json:"author"`
 		Source     string `json:"source"`
 		Size       int64  `json:"size"`
-		CreateTime int64  `json:"create_time"`
-		ModifyTime int64  `json:"modify_time"`
+		CreateTime int64  `json:"create_time"` // in seconds
+		ModifyTime int64  `json:"modify_time"` // in seconds
 		Content    string `json:"content"`
 	}
 
@@ -708,20 +708,20 @@ func (yc *YnoteClient) AuthorizeDownloadLink(link string) string {
 	params := make(url.Values)
 	yc.oauthClient.SignForm((*oauth.Credentials)(yc.AccToken), "GET", link, params)
 	return link + "?" + params.Encode()
-/*
-        $request_url = $download_path;
-        $request_params = $this->generateOAuthParams($oauth_access_token);
-        $base_string = $this->buildBaseString('GET', $request_url, $request_params);
-		$oauth_signature = $this->sign($base_string, $oauth_access_secret);
-		
-        $request_url_full = $request_url;
-		if (count($request_params) > 0) {
-			$request_params_string = $this->buildParamString($request_params);
-			$request_url_full .= '?'.$request_params_string;
-		}
-		if (isset($oauth_signature)) {
-			$request_url_full.='&oauth_signature='.$oauth_signature;
-		}
-		return $request_url_full;
-*/	
+	/*
+	           $request_url = $download_path;
+	           $request_params = $this->generateOAuthParams($oauth_access_token);
+	           $base_string = $this->buildBaseString('GET', $request_url, $request_params);
+	   		$oauth_signature = $this->sign($base_string, $oauth_access_secret);
+
+	           $request_url_full = $request_url;
+	   		if (count($request_params) > 0) {
+	   			$request_params_string = $this->buildParamString($request_params);
+	   			$request_url_full .= '?'.$request_params_string;
+	   		}
+	   		if (isset($oauth_signature)) {
+	   			$request_url_full.='&oauth_signature='.$oauth_signature;
+	   		}
+	   		return $request_url_full;
+	*/
 }

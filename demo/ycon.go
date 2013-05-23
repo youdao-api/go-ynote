@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/daviddengcn/go-villa"
 	ynote "github.com/daviddengcn/go-ynote"
+	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -32,64 +33,82 @@ func readAccToken() *ynote.Credentials {
 func saveAccToken(ac *ynote.Credentials) {
 	js, err := json.Marshal(ac)
 	if err != nil {
-		fmt.Println("Marshal accToken failed:", err)
+		log.Fatal("Marshal accToken failed:", err)
 		return
 	}
 	err = ac_FILENAME.WriteFile(js, 0666)
 	if err != nil {
-		fmt.Println("Write accToken failed:", err)
+		log.Fatal("Write accToken failed:", err)
 	}
+}
+
+func requestForAccess(yc *ynote.YnoteClient) {
+	fmt.Println("Access token (" + ac_FILENAME +
+		") not found, try authorize...")
+	fmt.Println("Requesting temporary credentials ...")
+	tmpCred, err := yc.RequestTemporaryCredentials()
+	if err != nil {
+		log.Fatal("RequestTemporaryCredentials failed: ", err)
+	}
+	fmt.Println("Temporary credentials got:", tmpCred)
+
+	authUrl := yc.AuthorizationURL(tmpCred)
+	fmt.Println(authUrl)
+	switch runtime.GOOS {
+	case "darwin":
+		exec.Command("open", authUrl).Start()
+	case "windows":
+		exec.Command("cmd", "/d", "/c", "start", authUrl).Start()
+	case "linux":
+		exec.Command("xdg-open", authUrl).Start()
+	}
+
+	fmt.Print("Please input the verifier: ")
+	verifier, err := bufio.NewReader(os.Stdin).ReadString('\n')
+
+	if err != nil {
+		log.Fatal("Read verifier from console failed: ", err)
+	}
+
+	verifier = strings.TrimSpace(verifier)
+	fmt.Println("verifier:", verifier)
+
+	accToken, err := yc.RequestToken(tmpCred, verifier)
+	if err != nil {
+		log.Fatal("RequestToken failed: ", err)
+		return
+	}
+
+	fmt.Println(accToken)
+	saveAccToken(accToken)
 }
 
 func main() {
 	yc := ynote.NewOnlineYnoteClient(ynote.Credentials{
-		Token: "",
-		Secret: ""})
+		Token:  "e13d9c47ee9f332c2cb53828e81c5e8f",
+		Secret: "3e37b6c79413014d482e4e00b86a041f"})
 
 	yc.AccToken = readAccToken()
 
 	if yc.AccToken == nil {
-		fmt.Println("Access token (" + ac_FILENAME +
-			") not found, try authorize...")
-		fmt.Println("Requesting temporary credentials ...")
-		tmpCred, err := yc.RequestTemporaryCredentials()
-		if err != nil {
-			fmt.Println("RequestTemporaryCredentials failed: ", err)
-			return
-		}
-		fmt.Println("Temporary credentials got:", tmpCred)
-
-		authUrl := yc.AuthorizationURL(tmpCred)
-		fmt.Println(authUrl)
-		switch runtime.GOOS {
-		case "darwin":
-			exec.Command("open", authUrl).Start()
-		case "windows":
-			exec.Command("cmd", "/d", "/c", "start", authUrl).Start()
-		case "linux":
-			exec.Command("xdg-open", authUrl).Start()
-		}
-
-		fmt.Print("Please input the verifier: ")
-		verifier, err := bufio.NewReader(os.Stdin).ReadString('\n')
-
-		if err != nil {
-			fmt.Println("Read verifier from console failed: ", err)
-			return
-		}
-
-		verifier = strings.TrimSpace(verifier)
-		fmt.Println("verifier:", verifier)
-
-		accToken, err := yc.RequestToken(tmpCred, verifier)
-		if err != nil {
-			fmt.Println("RequestToken failed: ", err)
-			return
-		}
-
-		fmt.Println(accToken)
-		saveAccToken(accToken)
+		requestForAccess(yc)
 	}
+
+	ui, err := yc.UserInfo()
+	if err != nil {
+		if fi, ok := err.(*ynote.FailInfo); ok && fi.Err == "1007" {
+			// Maybe token changed
+			requestForAccess(yc)
+			// Try fetch userinfo again
+			ui, err = yc.UserInfo()
+			if err != nil {
+				log.Fatal("UserInfo failed:", err)
+			}
+		} else {
+			log.Fatal("UserInfo failed:", err)
+		}
+	}
+	fmt.Printf("Hi, %s(last login at %v)\n", ui.User, ui.LastLoginTime)
 
 	const (
 		pos_ALL = iota
@@ -110,20 +129,20 @@ mainloop:
 				fmt.Println("ListNotebooks failed:", err)
 				break mainloop
 			}
-			
+
 			// sort the notebooks
 			villa.SortF(len(nbs), func(i, j int) bool {
 				nbi, nbj := nbs[i], nbs[j]
 				/*
-				if nbi.Group != nbj.Group {
-					if nbj.Group == "" || nbi.Group < nbj.Group {
-						return true
+					if nbi.Group != nbj.Group {
+						if nbj.Group == "" || nbi.Group < nbj.Group {
+							return true
+						}
+
+						return false
 					}
-					
-					return false
-				}
 				*/
-				
+
 				if nbi.Group != nbj.Group {
 					if nbj.Group == "" {
 						return true
@@ -131,18 +150,18 @@ mainloop:
 					if nbi.Group == "" {
 						return false
 					}
-					
+
 					return nbi.Group < nbj.Group
 				}
-				
+
 				return nbi.Name < nbj.Name
 			}, func(i, j int) {
 				nbs[i], nbs[j] = nbs[j], nbs[i]
-			});
+			})
 
 			fmt.Println("All notebooks:")
 			for i, nb := range nbs {
-				if nb.Group != "" && (i == 0 || nb.Group != nbs[i - 1].Group) {
+				if nb.Group != "" && (i == 0 || nb.Group != nbs[i-1].Group) {
 					fmt.Printf("    + %s\n", nb.Group)
 				}
 				if nb.Group == "" {
@@ -197,7 +216,9 @@ mainloop:
 			if len(notes) > 0 {
 				fmt.Printf("%d-%d: View notebook, ", 1, len(notes))
 			}
-			fmt.Println("a: all notebooks, q: quit, delete: delete the nootbook, put <filename>: add a note with a file as its attachment.")
+			fmt.Println("a: all notebooks, q: quit, " +
+				"delete: delete the nootbook, put <filename>: add a note " +
+				"with a file as its attachment.")
 			cmd, err := bufio.NewReader(os.Stdin).ReadString('\n')
 			if err != nil {
 				fmt.Println("Read console failed:", err)
@@ -227,7 +248,7 @@ mainloop:
 							fmt.Println("UploadAttachment failed:", err)
 							break
 						}
-						
+
 						var content string
 						if ai.Src == "" {
 							// an image
@@ -238,7 +259,8 @@ mainloop:
 							content = fmt.Sprintf(`<img path="%s" src="%s">`,
 								ai.URL, ai.Src)
 						}
-						path, err := yc.CreateNote(notebook.Path, fn, "ycon", "", content);
+						path, err := yc.CreateNote(notebook.Path, fn, "ycon",
+							"", content)
 						if err != nil {
 							fmt.Println("CreateNote failed:", err)
 							break
@@ -268,11 +290,14 @@ mainloop:
 			fmt.Printf("Author    : %s\n", ni.Author)
 			fmt.Printf("Source    : %s\n", ni.Source)
 			fmt.Printf("Size      : %d bytes\n", ni.Size)
-			fmt.Printf("CreateTime: %v\n", ni.CreateTime)
-			fmt.Printf("ModifyTime: %v\n", ni.ModifyTime)
+			fmt.Printf("CreateTime: %s\n", ni.CreateTime.Format("2006-01-02 15:04:05"))
+			fmt.Printf("ModifyTime: %s\n", ni.ModifyTime.Format("2006-01-02 15:04:05"))
 			fmt.Printf("Content   : %d bytes\n", len(ni.Content))
 
-			fmt.Println("a: all notebooks, n: notebook, q: quit, delete: delete current note, title/author/source <content>: change title/author/source, content: show content, adl <link>: authorize download link")
+			fmt.Println("a: all notebooks, n: notebook, q: quit, delete: " +
+				"delete current note, title/author/source <content>: change " +
+				"title/author/source, content: show content, adl <link>: " +
+				"authorize download link")
 			cmd, err := bufio.NewReader(os.Stdin).ReadString('\n')
 			if err != nil {
 				fmt.Println("Read console failed:", err)
@@ -301,7 +326,8 @@ mainloop:
 					newTitle := strings.TrimSpace(cmd[len("title "):])
 					if len(newTitle) > 0 {
 						fmt.Println("Change title to", newTitle)
-						err := yc.UpdateNote(notePath, newTitle, ni.Author, ni.Source, ni.Content)
+						err := yc.UpdateNote(notePath, newTitle, ni.Author,
+							ni.Source, ni.Content)
 						if err != nil {
 							fmt.Println("UpdateNote failed:", err)
 						}
@@ -310,16 +336,18 @@ mainloop:
 					newAuthor := strings.TrimSpace(cmd[len("author "):])
 					if len(newAuthor) > 0 {
 						fmt.Println("Change author to", newAuthor)
-						err := yc.UpdateNote(notePath, ni.Title, newAuthor, ni.Source, ni.Content)
+						err := yc.UpdateNote(notePath, ni.Title, newAuthor,
+							ni.Source, ni.Content)
 						if err != nil {
 							fmt.Println("UpdateNote failed:", err)
 						}
 					}
-				} else if strings.HasPrefix(cmd, "soruce ") {
+				} else if strings.HasPrefix(cmd, "source ") {
 					newSource := strings.TrimSpace(cmd[len("soruce "):])
 					if len(newSource) > 0 {
-						fmt.Println("Change soruce to", newSource)
-						err := yc.UpdateNote(notePath, ni.Title, ni.Author, newSource, ni.Content)
+						fmt.Println("Change source to", newSource)
+						err := yc.UpdateNote(notePath, ni.Title, ni.Author,
+							newSource, ni.Content)
 						if err != nil {
 							fmt.Println("UpdateNote failed:", err)
 						}
