@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/daviddengcn/go-villa"
-	ynote "github.com/daviddengcn/go-ynote"
+	ynote "github.com/youdao-api/go-ynote"
 	"log"
 	"os"
 	"os/exec"
