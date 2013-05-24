@@ -52,6 +52,6 @@ DEMO
 
 [demo 程序](https://github.com/daviddengcn/go-ynote/tree/master/demo) 是一个云笔记的控制台程序，演示了所有 API 的用法。实际使用时，请替换着里面的 token。
 
-LICENCE
+LICENSE
 -------
 BSD license.
