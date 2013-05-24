@@ -350,11 +350,11 @@ func (yc *YnoteClient) FindNotebook(name string) (*NotebookInfo, error) {
 	DeleteNotebook deletes a notebook. Returns nil if succeed, the error
 	otherwise.
 */
-func (yc *YnoteClient) DeleteNotebook(notebook string) error {
+func (yc *YnoteClient) DeleteNotebook(path string) error {
 	reqUrl := yc.URLBase + "/yws/open/notebook/delete.json"
 
 	params := make(url.Values)
-	params.Set("notebook", notebook)
+	params.Set("notebook", path)
 
 	res, err := yc.oauthClient.Post(http.DefaultClient, (*oauth.Credentials)(yc.AccToken), reqUrl, params)
 	if err != nil {
@@ -708,20 +708,4 @@ func (yc *YnoteClient) AuthorizeDownloadLink(link string) string {
 	params := make(url.Values)
 	yc.oauthClient.SignForm((*oauth.Credentials)(yc.AccToken), "GET", link, params)
 	return link + "?" + params.Encode()
-	/*
-	           $request_url = $download_path;
-	           $request_params = $this->generateOAuthParams($oauth_access_token);
-	           $base_string = $this->buildBaseString('GET', $request_url, $request_params);
-	   		$oauth_signature = $this->sign($base_string, $oauth_access_secret);
-
-	           $request_url_full = $request_url;
-	   		if (count($request_params) > 0) {
-	   			$request_params_string = $this->buildParamString($request_params);
-	   			$request_url_full .= '?'.$request_params_string;
-	   		}
-	   		if (isset($oauth_signature)) {
-	   			$request_url_full.='&oauth_signature='.$oauth_signature;
-	   		}
-	   		return $request_url_full;
-	*/
 }
