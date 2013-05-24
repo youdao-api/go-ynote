@@ -1,7 +1,7 @@
 go-ynote
 ========
 
-go-ynote 是[有道云笔记开放平台](http://note.youdao.com/open/) API 的 [Go](http://golang.org/) 语言封装。
+go-ynote 是[有道云笔记开放平台](http://note.youdao.com/open/) API 的 [Go](http://golang.org/) SDK。
 
 用法
 ----
