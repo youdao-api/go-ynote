@@ -3,7 +3,9 @@ go-ynote
 
 go-ynote 是[有道云笔记开放平台](http://note.youdao.com/open/) API 的 [Go](http://golang.org/) SDK。
 
-文档请点击： [GoDoc](http://godoc.org/github.com/youdao-api/go-ynote)
+[GoDoc 文档](http://godoc.org/github.com/youdao-api/go-ynote)
+
+[使用了 go-ynote 的 项目列表](http://godoc.org/github.com/youdao-api/go-ynote?importers)
 
 用法
 ----
