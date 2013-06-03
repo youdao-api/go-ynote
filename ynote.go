@@ -155,7 +155,6 @@ func (yc *YnoteClient) UserInfo() (ui *UserInfo, err error) {
 	if err != nil {
 		return nil, err
 	}
-	//	fmt.Println(string(result))
 
 	var userInfo struct {
 		ID              string `json:"id"`
@@ -526,7 +525,7 @@ func (yc *YnoteClient) NoteInfo(path string) (*NoteInfo, error) {
 	if res.StatusCode == 500 {
 		return nil, parseFailInfo(js)
 	}
-
+	
 	var noteInfo struct {
 		Title      string `json:"title"`
 		Author     string `json:"author"`
