@@ -330,16 +330,17 @@ func (yc *YnoteClient) ListNotebooks() ([]*NotebookInfo, error) {
 }
 
 /*
-	FindNotebook returns the NotebookInfo of the speicified name, or nil if not found.
+	FindNotebook returns the NotebookInfo of the speicified name, or nil if not
+	found. Set group to "*" to match any group.
 */
-func (yc *YnoteClient) FindNotebook(name string) (*NotebookInfo, error) {
+func (yc *YnoteClient) FindNotebook(group, name string) (*NotebookInfo, error) {
 	nbs, err := yc.ListNotebooks()
 	if err != nil {
 		return nil, err
 	}
 
 	for _, nb := range nbs {
-		if nb.Name == name {
+		if (group == "*" || nb.Group == group) && nb.Name == name {
 			return nb, nil
 		}
 	}
