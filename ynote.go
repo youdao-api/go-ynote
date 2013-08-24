@@ -94,8 +94,8 @@ func NewYnoteClient(credentials Credentials, urlBase string) *YnoteClient {
 /*
 	RequestTemporaryCredentials requests a temporary token
 */
-func (yc *YnoteClient) RequestTemporaryCredentials() (*Credentials, error) {
-	tmpCred, err := yc.oauthClient.RequestTemporaryCredentials(http.DefaultClient, "", nil)
+func (yc *YnoteClient) RequestTemporaryCredentials(callback string) (*Credentials, error) {
+	tmpCred, err := yc.oauthClient.RequestTemporaryCredentials(http.DefaultClient, callback, nil)
 	if err != nil {
 		return nil, err
 	}
