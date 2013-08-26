@@ -104,6 +104,18 @@ func (yc *YnoteClient) RequestTemporaryCredentials() (*Credentials, error) {
 }
 
 /*
+	RequestTemporaryCredentials requests a temporary token with a callback url
+*/
+func (yc *YnoteClient) RequestTemporaryCredentialsWithCallBack(callback string) (*Credentials, error) {
+	tmpCred, err := yc.oauthClient.RequestTemporaryCredentials(http.DefaultClient, callback, nil)
+	if err != nil {
+		return nil, err
+	}
+	return (*Credentials)(tmpCred), nil
+
+}
+
+/*
 	RequestTemporaryCredentials returns the autorization URL
 */
 func (yc *YnoteClient) AuthorizationURL(tmpCred *Credentials) string {
