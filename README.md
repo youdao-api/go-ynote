@@ -1,4 +1,4 @@
-go-ynote
+go-ynote [![GoSearch](http://go-search.org/badge?id=github.com%2Fyoudao-api%2Fgo-ynote)](http://go-search.org/view?id=github.com%2Fyoudao-api%2Fgo-ynote)
 ========
 
 go-ynote 是[有道云笔记开放平台](http://note.youdao.com/open/) API 的 [Go](http://golang.org/) SDK。
