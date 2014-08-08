@@ -5,7 +5,7 @@ go-ynote 是[有道云笔记开放平台](http://note.youdao.com/open/) API 的 
 
 [GoDoc 文档](http://godoc.org/github.com/youdao-api/go-ynote)
 
-[使用了 go-ynote 的 项目列表](http://godoc.org/github.com/youdao-api/go-ynote?importers)
+[使用了 go-ynote 的 项目列表](http://go-search.org/view?id=github.com%2fyoudao-api%2fgo-ynote#imported)
 
 用法
 ----
