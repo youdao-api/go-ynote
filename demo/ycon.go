@@ -4,15 +4,17 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"github.com/daviddengcn/go-villa"
-	//ynote "github.com/youdao-api/go-ynote"
-	ynote ".."
 	"log"
 	"os"
 	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/golangplus/sort"
+
+	"github.com/daviddengcn/go-villa"
+	ynote "github.com/youdao-api/go-ynote"
 )
 
 const ac_FILENAME = villa.Path("at.json")
@@ -132,18 +134,8 @@ mainloop:
 			}
 
 			// sort the notebooks
-			villa.SortF(len(nbs), func(i, j int) bool {
+			sortp.SortF(len(nbs), func(i, j int) bool {
 				nbi, nbj := nbs[i], nbs[j]
-				/*
-					if nbi.Group != nbj.Group {
-						if nbj.Group == "" || nbi.Group < nbj.Group {
-							return true
-						}
-
-						return false
-					}
-				*/
-
 				if nbi.Group != nbj.Group {
 					if nbj.Group == "" {
 						return true

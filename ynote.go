@@ -258,7 +258,7 @@ type FailInfo struct {
 
 /* Implementation of error.Error  */
 func (info *FailInfo) Error() string {
-	return fmt.Sprintf("%d: %s", info.Err, info.Message)
+	return fmt.Sprintf("%s: %s", info.Err, info.Message)
 }
 
 func parseFailInfo(js []byte) *FailInfo {
@@ -537,7 +537,7 @@ func (yc *YnoteClient) NoteInfo(path string) (*NoteInfo, error) {
 	if res.StatusCode == 500 {
 		return nil, parseFailInfo(js)
 	}
-	
+
 	var noteInfo struct {
 		Title      string `json:"title"`
 		Author     string `json:"author"`
